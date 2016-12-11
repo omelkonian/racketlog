@@ -1,15 +1,7 @@
 #lang racket
 (require racket/stream)
 (require racketlog/unification)
-(provide infer)
-
-; KB
-(define assertions
-  '(
-    (("father" "pavlos" "orestis"))
-    (("mother" "alkisti" "orestis"))
-    (("couple" "X" "Y") ("father" "X" "Z") ("mother" "Y" "Z"))
-    ))
+(provide run)
 
 ; Helpers
 (define conclusion car)
@@ -49,11 +41,11 @@
         [(append (extract-variables (car expr))
                  (extract-variables (cdr expr)))]))
 
-(define (generate-ids variables)
+(define (generate-ids variables)  
   (map (lambda (var) (cons var (gen-var))) variables))
 
 (define (gen-var)
-  (string-titlecase (symbol->string (gensym))))
+  (symbol->string (gensym "G#")))  
 
 (define (rename expr replace-map)
   (cond [(constant? expr) expr]
@@ -63,11 +55,13 @@
 
 ; Inference
 (define (solve goal bindings)
+  ;(displayln "\n==================================================")
   ;(displayln (format "SOLVE ~a" goal))
-  ;(displayln (format "\t{~a}" bindings))
+  ;(displayln (format "\t[~a]" bindings))
+  ;(displayln (format "\t{~a}" KB))
   (if (conjunctive? goal)
       (filter-goals goal (stream bindings))
-      (infer goal bindings assertions)))
+      (infer goal bindings KB)))
 
 (define (filter-goals goals bindings-stream)
   ;(displayln (format "FILTERS ~a" goals))
@@ -87,7 +81,9 @@
 
 (define (infer goal bindings kb)
   ;(displayln "\n--------------------------------------------------")
-  ;(displayln (format "INFER ~a [~a]" goal bindings))
+  ;(displayln (format "INFER ~a" goal))
+  ;(displayln (format "\t[~a]" bindings))
+  ;(displayln (format "\t{~a}" kb))
   (if (null? kb)
       empty-stream
       (let*([assertion (rename-variables (car kb))]
@@ -108,38 +104,36 @@
                 (stream-cons match
                              (infer goal bindings (cdr kb))))))))
 
-(define (apply-bindings pattern bindings)
-  (cond [(constant? pattern) pattern]
-        [(variable? pattern)
-         (let ([binding (assoc pattern bindings)])
-           (if binding
-               (apply-bindings (cdr binding) bindings)
-               pattern))]
-        [(cons (apply-bindings (car pattern) bindings)
-               (apply-bindings (cdr pattern) bindings))]))
-
 ; Printing
-(define (print-solutions goal bindings-stream)
-  (cond [(stream-empty? bindings-stream) '()]
-        [(println (apply-bindings goal (stream-first bindings-stream)))
-         (print-solutions goal (stream-rest bindings-stream))]))
+(define (external-variables? variable)
+  (define identifier (car variable))
+  (not (string-prefix? identifier "G#")))
 
-; Test
-(stream-for-each
- (lambda (s)
-   (displayln "\n▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼")
-   (displayln s)
-   (displayln "▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲")
-   (read-char))
+(define (get-bottom-value id bindings)
+  (define match (assoc id bindings))
+  (if match (get-bottom-value (cdr match) bindings) id))
 
- (stream-append
-   ; SINGLE
-   (solve '(("father" "P" "orestis")) '())
-   (solve '(("father" "P" "O")) '())
-   (solve '(("mother" "A" "O")) '())
-   ; CONJUNCTIVE
-   (solve '(("father" "P" "orestis") ("mother" "A" "orestis")) '())
-   (solve '(("couple" "pavlos" "alkisti")) '())
- )
+(define (show-solution solution)
+  (displayln "\n▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼")
+  (define user-variables (filter external-variables? solution))
+  (if (null? user-variables)
+      (displayln "True.")
+      (map (lambda (entry)
+             (define bottom (get-bottom-value (cdr entry) solution))         
+             (displayln (format "~a = ~a" (car entry) bottom)))
+           user-variables))
+  (displayln "▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲"))
+  
+; Knowledge-base
+(define KB null)
 
-)
+; Running
+(define (run query knowledge-base)
+  ;(displayln (format "RUN ~a" query))
+  ;(displayln (format "\t {~a}" knowledge-base))
+  (set! KB knowledge-base)
+  (stream-for-each
+   (lambda (solution)
+     (show-solution solution)
+     (read-char))
+   (solve query '())))

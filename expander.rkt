@@ -4,30 +4,24 @@
 
 (provide ; Transliteration
          racketlog-program clause query functor
-         ; REPL
          ;#%top-interaction
          ; Macro Setup
          (rename-out [racketlog-module-begin #%module-begin]))
 
 (define-macro (racketlog-module-begin PARSE-TREE)
   #'(#%module-begin
-     PARSE-TREE     
-     ))
+     PARSE-TREE))
+
+; REPL
+;(define-macro (top-interaction . form)
+ ; (displayln #'form))
 
 ; Transliteration
-(define-macro (racketlog-program CLAUSES ... QUERY)  
+(define-macro (racketlog-program CLAUSES ... QUERY)
   #'(begin
-      (displayln "============= KNOWLEDGE BASE ============")
-      ; Populate knowledge base (KB)
-      (define kb (list CLAUSES ...))
-      ; Print KB
-      (map (lambda (t)
-             (println t))
-           kb)
-      (displayln "==========================================")
-      ; Print query
-      (displayln (list "?" (list QUERY)))
-     ))
+      (define KB (list CLAUSES ...))      
+      (run QUERY KB)
+      (displayln "No more solutions.")))
 
 (define-macro-cases clause
   [(clause (predicate PRED) ".")
